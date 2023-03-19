@@ -51,7 +51,7 @@ DLRM baseline can be run on a hybrid CPU-GPU system using following script
 Input Segregation - Hot/Cold
 -----------------------------
 
-Input training dataset requires to be segregated into hold and cold inputs and hot and cold embeddings required for Slipstream.  Based on available GPU memory for hot embedding entries $\Lambda$ parameter is selected that defines if an embedding entry is popular or not -- based on embeddings access frequency.
+Input training dataset requires to be segregated into hold and cold inputs and hot and cold embeddings required for Slipstream.  Based on available GPU memory for hot embedding entries, $\Lambda$ parameter is selected that defines if an embedding entry is popular or not -- based on embeddings access frequency and further training dataset is segregated into hot and cold inputs.
 
 Input segregation can be executed on a CPU system using following script
 ```
@@ -68,6 +68,42 @@ FAE baseline can be run on a hybrid CPU-GPU system using following script
 
 Running Slipstream
 -------------------
+
+Slipstream identifies the stale embeddings via threshold ($T$) found automatically based on the target drop percentage ($D$) along with certain additional parameters like $\alpha$, which determines the condition under which an input is dropped given the number of accessed embeddings by input are stale.
+
+Slipstream can be run on a hybird CPU-GPU system using following script
+```
+     ./run_slipstream.sh
+```
+
+Requirements
+-------------
+
+This project requires **Python** $\geq 3.7$, with below dependencies.
+
+pytorch
+
+scikit-learn
+
+numpy
+
+pandas
+
+onnx (*optional*)
+
+pydot (*optional*)
+
+torchviz (*optional*)
+
+tqdm
+
+cPickle
+
+
+License
+-------
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
 
 
 
