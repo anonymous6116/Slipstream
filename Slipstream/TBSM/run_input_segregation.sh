@@ -1,0 +1,9 @@
+python ./profiling/tbsm_input_profiler.py --arch-sparse-feature-size=16 /
+											--arch-embedding-size="987994-4162024-9439" \
+											--arch-mlp-bot="1-16" \
+											--arch-mlp-top="15-1" \
+											--data-generation=dataset \
+											--data-set=alibaba \
+											--raw-data-file=./input/taobao_train.txt\
+											--processed-data-file=./output/taobao_train_t20.npz \
+											--mini-batch-size=2 

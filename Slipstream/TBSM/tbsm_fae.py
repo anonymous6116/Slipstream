@@ -618,18 +618,6 @@ def iterate_train_data(args, train_hot_ld, train_normal_ld, hot_emb_dict, val_ld
                 nbatches = len(train_ld)
 
 
-
-
-        # shared memory 
-        shm_0 = shared_memory.SharedMemory(create=True, size=40 * 4 * len(train_hot))
-        cluster_0 = np.ndarray(len(train_hot), dtype=object, buffer=shm_0.buf)
-
-        shm_1 = shared_memory.SharedMemory(create=True, size=40 * 4 * len(train_hot))
-        cluster_1 = np.ndarray(len(train_hot), dtype=object, buffer=shm_1.buf)
-
-
-
-
         # specify the optimizer algorithm
         optimizer = torch.optim.Adagrad(tbsm.parameters(), lr=args.learning_rate)
 

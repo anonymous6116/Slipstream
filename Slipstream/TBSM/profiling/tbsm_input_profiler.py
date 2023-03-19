@@ -200,59 +200,6 @@ if __name__ == "__main__":
 			ln_emb
 		)))
 
-	train = []
-	for i, train_tuple in enumerate(train_data):
-		lS_i, X, T = train_tuple
-		train.append([lS_i, X, T])
-	train = np.array(train, dtype = object)
-	train = train.tolist()
-	
-	
-	X_bytes = train[0][1].nbytes
-	lS_i_bytes = train[0][0].nbytes
-	T_bytes = train[0][2].nbytes
-
-	input_bytes = X_bytes + lS_i_bytes + T_bytes
-
-	# Shared Memories for Multiprocessing based final input classification
-	shm_train_hot = shared_memory.SharedMemory(create = True, size = input_bytes * len(train))
-	train_hot_array = np.ndarray(len(train), dtype = object, buffer = shm_train_hot.buf)
-
-	shm_train_normal = shared_memory.SharedMemory(create = True, size = input_bytes * len(train))
-	train_normal_array = np.ndarray(len(train), dtype = object, buffer = shm_train_normal.buf)
-
-	def single_process_ip_classification(train_data, hot_emb_dict, train_hot_array, train_normal_array, chunksize):
-		hot_ctr = 0
-		normal_ctr = 0
-
-		i = int(current_process().name)
-
-		print("Running process : ", int(current_process().name), " with pid : ", os.getpid())
-		for a, train_tuple in enumerate(train_data):
-			lS_i = []
-			for j, lS_i_row in enumerate(train_tuple[0]):
-				lS_i_t = []
-				for k, lS_i_index in enumerate(lS_i_row):
-					if (j, int(lS_i_index)) in hot_emb_dict[j].keys():
-						lS_i_t.append(hot_emb_dict[j][(j, int(lS_i_index))])
-					else:
-						break
-
-				if ( len(lS_i_t) == len(lS_i_row)):
-					lS_i.append(lS_i_t)
-				else:
-					break
-
-			if ( len(lS_i) == len(train_tuple[0])):
-				lS_i = np.array(lS_i).astype(np.float32)
-				train_tuple[0] = lS_i
-				train_hot_array[i*chunksize + hot_ctr] = train_tuple
-				hot_ctr += 1
-			else:
-				train_normal_array[i*chunksize + normal_ctr] = train_tuple
-				normal_ctr += 1
-		print("Process : ", int(current_process().name), " done with hot inputs ", hot_ctr, " and normal inputs ", normal_ctr)
-		
 	# Input Profiler
 	print("Input Profiling Initializing!!\n")
 
@@ -264,8 +211,6 @@ if __name__ == "__main__":
 	print("Input Sampling Rate for Profiling : ", x, "%")
 
 	# =============================== PROFILING START ======================================
-	profiling_begin = time_wrap()
-
 	sample_train_data_len = int((x / 100) * len(train_data))
 	print("Training Input Dataset Length (D) : ", len(train_data))
 	sampled_train_data = np.random.randint(0, len(train_data), size = sample_train_data_len)
@@ -291,10 +236,9 @@ if __name__ == "__main__":
 	# =================== Filling Skew Table Emb Counter ======================
 	# Updating Skew table with sampled input profiling data
 	for i, sample in enumerate(sampled_train_data):
-		lS_i, X, label = train_data[sample]
-		for j, lS_i_row in enumerate(lS_i):
-			for k, lS_i_index in enumerate(lS_i_row):
-				skew_table[j][int(lS_i_index)][2] = skew_table[j][int(lS_i_index)][2] + 1
+		X, lS_i, label = train_data[sample]
+		for j, lS_i_index in enumerate(lS_i):
+			skew_table[j][int(lS_i_index)][2] = skew_table[j][int(lS_i_index)][2] + 1
 
 	# Combining skew table list into a 2D array
 	skew_table_array = np.vstack(skew_table) 
@@ -320,67 +264,52 @@ if __name__ == "__main__":
 		len_hot_emb_dict += len(hot_emb_dict[i])
 
 	del skew_table_array
-
 	print("Hot Emb Dict Size : ", (len_hot_emb_dict * 4 * args.arch_sparse_feature_size) / (1024 ** 2), " MB")
 	print("Hot Emb Dict Creation Completed!!")
 	
 	# ===================== Input Profiling ========================
 	print("Starting Input Classification")
 
-	num_cores = mp.cpu_count()
-	print("Num Cores : ", num_cores)
-	chunksize = len(train) // num_cores
+	# ===================== Input Profiling ========================
+	train_hot = []
+	train_normal = []
 
-	processes = [Process(target = single_process_ip_classification,
-						name = "%i" % i,
-						args = (train[i*chunksize : (i+1)*chunksize],
-								hot_emb_dict,
-								train_hot_array,
-								train_normal_array,
-								chunksize
-								)
-						)
-				for i in range(0, num_cores)]
-	
-	for process in processes:
-		process.start()
-	
-	for process in processes:
-		process.join()
+	for a, train_tuple in enumerate(train_data):
+		lS_i = []
+		for j, lS_i_row in enumerate(train_tuple[0]):
+			lS_i_t = []
+			for k, lS_i_index in enumerate(lS_i_row):
+				if (j, int(lS_i_index)) in hot_emb_dict[j].keys():
+					lS_i_t.append(hot_emb_dict[j][(j, int(lS_i_index))])
+				else:
+					break
 
-	# Removing None elements from both train hot and train normal arrays
-	nan_array_hot = pd.isnull(train_hot_array)
-	not_nan_array_hot = ~ nan_array_hot
-	train_hot_array = train_hot_array[not_nan_array_hot]
-	
-	nan_array_normal = pd.isnull(train_normal_array)
-	not_nan_array_normal = ~ nan_array_normal
-	train_normal_array = train_normal_array[not_nan_array_normal]
+			if ( len(lS_i_t) == len(lS_i_row)):
+				lS_i.append(lS_i_t)
+			else:
+				break
+
+		if ( len(lS_i) == len(train_tuple[0])):
+			lS_i = np.array(lS_i).astype(np.float32)
+			train_tuple[0] = lS_i
+			train_hot.append(train_tuple)
+		else:
+			train_normal.append(train_tuple)
 
 	print("===================== Input Profiling Stats ==================")
-	print("Train Hot Data : ", len(train_hot_array))
-	print("Train Normal Data : ", len(train_normal_array))
-	print("Total Data : ", len(train_hot_array) + len(train_normal_array))
-	print("Percentage : ", (len(train_hot_array) / (len(train_hot_array) + len(train_normal_array))) * 100 )
-	print("==============================================================")
-
-	# Closing the shared memories and unlinking
-	shm_train_hot.close()
-	shm_train_hot.unlink()
-
-	shm_train_normal.close()
-	shm_train_normal.unlink()
-
-	profiling_end = time_wrap()
-	print("FAE Profiling Time : ", profiling_end - profiling_begin, " s")
-	
-	train_hot = np.array(train_hot_array, dtype = object)
-	train_normal = np.array(train_normal_array, dtype = object)
-	hot_emb_dict = np.array(hot_emb_dict, dtype = object)
+	print("Train_Hot_Data ", len(train_hot))
+	print("Train_Normal_Data ", len(train_normal))
+	print("Total_Data ", len(train_hot) + len(train_normal))
+	print("Percentage ", (len(train_hot) / (len(train_hot) + len(train_normal))) * 100 )
+	print("==============================================================") 
+				
+	# ======================== Saving npz files =======================
+	train_hot = np.array(train_hot, dtype=object)
+	train_normal = np.array(train_normal, dtype=object)
+	hot_emb_dict = np.array(hot_emb_dict, dtype=object)
 
 	np.savez_compressed('./data/taobao_hot_cold/train_hot.npz', train_hot)
 	np.savez_compressed('./data/taobao_hot_cold/train_normal.npz', train_normal)
 	np.savez_compressed('./data/taobao_hot_cold/hot_emb_dict.npz', hot_emb_dict)
 	print("Save Hot/Cold Data Completed")
-	sys.exit("FAE profiling completed!!")
 	

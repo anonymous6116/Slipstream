@@ -63,7 +63,7 @@ Running FAE Baseline
 
 FAE baseline can be run on a hybrid CPU-GPU system using following script
 ```
-     ./run_dlrm_baseline.sh
+     ./run_fae_baseline.sh
 ```
 
 Running Slipstream
